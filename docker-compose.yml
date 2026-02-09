@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    restart: always
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: authdb
+    volumes:
+      - mongo_data:/data/db
+      - ./docker/mongo/init:/docker-entrypoint-initdb.d
+    networks:
+      - backend-network
+
+  postgres:
+    image: postgres:16
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: loansdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - backend-network
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-network
+
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    expose:
+      - "3000"
+    depends_on:
+      - mongo
+      - postgres
+      - redis
+    networks:
+      - backend-network
+
+  frontend:
+    build: ./frontend
+    expose:
+      - "3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=/api
+      - NEXT_PUBLIC_INSTANCE_ID=${HOSTNAME}
+    depends_on:
+      - backend
+    networks:
+      - backend-network
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - backend-network
+
+  worker:
+    build:
+      context: ./backend
+    command: node worker/loan.worker.js
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - backend-network
+
+volumes:
+  mongo_data:
+  postgres_data:
+
+networks:
+  backend-network:
+    driver: bridge
