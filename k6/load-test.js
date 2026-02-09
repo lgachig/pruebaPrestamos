@@ -3,11 +3,9 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '10s', target: 10 },   // Normal
-    { duration: '10s', target: 50 },   // Presión (Límite del middleware)
-    { duration: '20s', target: 150 },  // 🔥 SATURACIÓN activa
-    { duration: '10s', target: 20 },   // Recuperación
-    { duration: '10s', target: 0 },    // Fin
+    { duration: '5s', target: 20 },
+    { duration: '10s', target: 250 }, // 🔥 Sube a 250 usuarios para saturar las 3 instancias
+    { duration: '5s', target: 0 },
   ],
 };
 

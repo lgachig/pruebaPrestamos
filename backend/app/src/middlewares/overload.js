@@ -1,5 +1,5 @@
 let currentRequests = 0;
-const MAX_REQUESTS = 50;
+const MAX_REQUESTS = 5;
 
 module.exports = function overload(req, res, next) {
   currentRequests++;
