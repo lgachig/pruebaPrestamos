@@ -1,49 +1,85 @@
 const express = require('express');
-const LoanService = require('../services/LoanService');
 const router = express.Router();
+const LoanService = require('../services/LoanService');
 const loanService = new LoanService();
-const redis = require('../config/redis');
+const redis = require('../config/redis'); 
+const overload = require('../middlewares/overload');
 
-router.get('/report', async (req, res) => {
+/**
+ * REPORTE DE PRÉSTAMOS
+ * Implementa el patrón de Polling/Caché por saturación
+ */
+router.get('/report', overload, async (req, res) => {
   try {
     const cacheKey = 'loans:report';
 
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      console.log('CACHE HIT');
-      return res.json(JSON.parse(cached));
+    // 1. Si el sistema está saturado, intentamos servir desde Redis
+    if (req.overloaded) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log('🔴 MODO SATURADO: Sirviendo desde Caché');
+        return res.json({
+          status: "Saturado - Servido desde Caché Redis",
+          data: JSON.parse(cached)
+        });
+      }
     }
 
-    console.log('CACHE MISS');
-    const report = await loanService.getAllLoans(); // o el método que uses
+    // 2. Si no hay saturación (o no hay caché), vamos a la base de datos
+    console.log('🟢 MODO NORMAL: Consultando PostgreSQL');
+    const report = await loanService.getAllLoans();
 
-    await redis.setex(cacheKey, 60, JSON.stringify(report));
-    res.json(report);
+    // 3. Actualizamos la caché para que esté lista ante una futura saturación
+    await redis.set(cacheKey, JSON.stringify(report), 'EX', 60);
+
+    res.json({
+      status: "Normal - Servido desde PostgreSQL",
+      data: report
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-router.post('/', async (req, res) => {
+/**
+ * CREAR PRÉSTAMO
+ * Implementa el patrón de Cola (Queue) por saturación
+ */
+router.post('/', overload, async (req, res) => {
   try {
+    // Si el sistema está saturado, encolamos en Redis
+    if (req.overloaded) {
+      await redis.lpush('loan_queue', JSON.stringify(req.body));
+      return res.status(202).json({ 
+        status: "Saturado", 
+        message: 'Petición encolada en Redis para procesamiento diferido' 
+      });
+    }
+
+    // Proceso normal
     const { email, equipment, quantity } = req.body;
     await loanService.loanEquipment(email, equipment, quantity);
 
-    await redis.del('loans:report'); // 👈 CLAVE
+    // Invalidamos la caché porque los datos cambiaron
+    await redis.del('loans:report');
 
-    res.json({ message: 'Préstamo realizado correctamente' });
+    res.status(201).json({ status: "Normal", message: 'Préstamo realizado correctamente' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
+/**
+ * DEVOLVER EQUIPO
+ */
 router.put('/return/:loanId', async (req, res) => {
   try {
     const loanId = parseInt(req.params.loanId);
     const { email } = req.body;
     await loanService.returnEquipment(loanId, email);
 
-    await redis.del('loans:report'); // 👈 CLAVE
+    // Invalidamos la caché
+    await redis.del('loans:report');
 
     res.json({ message: 'Equipo devuelto correctamente' });
   } catch (error) {
@@ -51,6 +87,9 @@ router.put('/return/:loanId', async (req, res) => {
   }
 });
 
+/**
+ * AGREGAR EQUIPO NUEVO
+ */
 router.post('/equipment', async (req, res) => {
   try {
     const { name, type, quantity } = req.body;
@@ -64,10 +103,12 @@ router.post('/equipment', async (req, res) => {
   }
 });
 
+/**
+ * ELIMINAR EQUIPO
+ */
 router.delete('/equipment/:id', async (req, res) => {
   try {
     await loanService.deleteEquipment(req.params.id);
-
     await redis.del('loans:report');
 
     res.json({ message: 'Equipo eliminado' });
