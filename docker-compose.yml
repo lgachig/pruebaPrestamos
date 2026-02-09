@@ -74,15 +74,19 @@ services:
       - backend-network
 
   worker:
-    build:
-      context: ./backend
+    build: ./backend
     command: node worker/loan.worker.js
+    environment:
+      - DB_HOST=postgres
+      - DB_USER=admin
+      - DB_PASSWORD=admin123
+      - DB_NAME=loansdb
+      - REDIS_HOST=redis
     depends_on:
       - redis
-      - backend
+      - postgres
     networks:
       - backend-network
-
 volumes:
   mongo_data:
   postgres_data:

@@ -1,11 +1,11 @@
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  host: process.env.PG_HOST,
-  port: process.env.PG_PORT,
-  user: process.env.PG_USER,
-  password: process.env.PG_PASSWORD,
-  database: process.env.PG_DATABASE,
+  host: process.env.DB_HOST || 'postgres',
+  user: process.env.DB_USER || 'admin',      // 👈 Asegúrate que coincida con tu docker-compose
+  password: process.env.DB_PASSWORD || 'admin123',
+  database: process.env.DB_NAME || 'loansdb',
+  port: 5432,
 });
 
 pool.on('connect', () => {

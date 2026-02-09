@@ -3,34 +3,32 @@ import { check, sleep } from 'k6';
 
 export const options = {
   stages: [
-    { duration: '10s', target: 10 },   // normal
-    { duration: '10s', target: 50 },   // presión
-    { duration: '20s', target: 150 },  // 🔥 SATURACIÓN
-    { duration: '10s', target: 20 },   // baja
-    { duration: '10s', target: 0 },    // descanso
+    { duration: '10s', target: 10 },   // Normal
+    { duration: '10s', target: 50 },   // Presión (Límite del middleware)
+    { duration: '20s', target: 150 },  // 🔥 SATURACIÓN activa
+    { duration: '10s', target: 20 },   // Recuperación
+    { duration: '10s', target: 0 },    // Fin
   ],
 };
 
 export default function () {
+  const params = { headers: { 'Content-Type': 'application/json' } };
 
-  // 🔁 POLLING (lecturas)
-  http.get('http://localhost/api/loans/report');
+  // 1. Probar POLLING (Lectura de reporte)
+  const resGet = http.get('http://localhost/api/loans/report');
+  check(resGet, { 'status is 200': (r) => r.status === 200 });
 
-  // ✍️ ESCRITURAS (afectan backend)
+  // 2. Probar ESCRITURA (Creación de préstamo)
   const payload = JSON.stringify({
-    amount: Math.floor(Math.random() * 1000),
-    user_id: 1,
-    student_email: `test${Math.random()}@mail.com`,
-    equipment_id: 1,
+    email: "ana@mail.com", 
+    equipment: 1,          
     quantity: 1
   });
 
-  const res = http.post('http://localhost/api/loans', payload, {
-    headers: { 'Content-Type': 'application/json' },
-  });
+  const resPost = http.post('http://localhost/api/loans', payload, params);
 
-  check(res, {
-    '201 o 202': (r) => r.status === 201 || r.status === 202,
+  check(resPost, {
+    '201 (DB) o 202 (Redis)': (r) => r.status === 201 || r.status === 202,
   });
 
   sleep(0.1);
