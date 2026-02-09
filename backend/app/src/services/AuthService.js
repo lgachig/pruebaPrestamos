@@ -1,5 +1,9 @@
+const bcrypt = require('bcrypt');
 const MongoFactory = require('../factories/MongoFactory');
 const UserDTO = require('../dto/UserDTO');
+
+/** Coste del hash (10 = ~100ms, mayor = más seguro pero más lento) */
+const SALT_ROUNDS = 10;
 
 class AuthService {
   constructor() {
@@ -16,7 +20,8 @@ class AuthService {
   
     const user = userDoc.toObject ? userDoc.toObject() : userDoc;
   
-    if (user.password !== password) {
+    const passwordValid = await this._verifyPassword(password, user.password);
+    if (!passwordValid) {
       throw new Error('Credenciales incorrectas');
     }
   
@@ -28,6 +33,23 @@ class AuthService {
       active: user.active,
       createdAt: user.createdAt
     });
+  }
+
+  /**
+   * Verifica la contraseña: soporta bcrypt hash o texto plano (migración).
+   * Nunca almacenar contraseñas en texto plano en producción.
+   */
+  async _verifyPassword(plainPassword, storedHash) {
+    if (!storedHash) return false;
+    if (storedHash.startsWith('$2') && storedHash.length > 50) {
+      return await bcrypt.compare(plainPassword, storedHash);
+    }
+    return plainPassword === storedHash;
+  }
+
+  /** Encripta una contraseña con bcrypt */
+  static async hashPassword(plainPassword) {
+    return bcrypt.hash(plainPassword, SALT_ROUNDS);
   }
 }
 

@@ -5,6 +5,61 @@ const loanService = new LoanService();
 const redis = require('../config/redis'); 
 const overload = require('../middlewares/overload');
 
+// ========== RUTAS ESPECÍFICAS PRIMERO (antes de /:param) ==========
+
+/**
+ * LISTAR TODOS LOS PRÉSTAMOS (para Admin / Historial)
+ */
+router.get('/all', overload, async (req, res) => {
+  try {
+    const loans = await loanService.getAllLoans();
+    res.json(loans.map(l => ({
+      loanId: l.loanId,
+      email: l.email,
+      equipment: l.equipment,
+      quantity: l.quantity,
+      loanDate: l.loanDate,
+      returnDate: l.returnDate,
+      status: l.status
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * INVENTARIO DISPONIBLE (para Admin y Student)
+ */
+router.get('/available', overload, async (req, res) => {
+  try {
+    const inventory = await loanService.getAllInventory();
+    res.json(inventory);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * HISTORIAL DE PRÉSTAMOS POR EMAIL (para Student)
+ */
+router.get('/user/:email', async (req, res) => {
+  try {
+    const { email } = req.params;
+    const loans = await loanService.getUserLoanHistory(email);
+    res.json(loans.map(l => ({
+      loanId: l.loanId,
+      email: l.email,
+      equipment: l.equipment,
+      quantity: l.quantity,
+      loanDate: l.loanDate,
+      returnDate: l.returnDate,
+      status: l.status
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 /**
  * REPORTE DE PRÉSTAMOS
  * Implementa el patrón de Polling/Caché por saturación

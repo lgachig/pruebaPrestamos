@@ -4,11 +4,12 @@ const UserSchema = new mongoose.Schema({
   name: String,
   email: { type: String, unique: true },
   password: String,
+  role: { type: String, enum: ['ADMIN', 'STUDENT'], default: 'STUDENT' },
   roleId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Role'
   },
-  active: Boolean,
+  active: { type: Boolean, default: true },
   createdAt: {
     type: Date,
     default: Date.now
